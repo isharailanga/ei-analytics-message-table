@@ -1,0 +1,24 @@
+{
+  "name": "MessageTable",
+  "id": "MessageTable",
+  "thumbnailURL": "",
+  "configs": {
+    "pubsub": {
+      "types": [
+        "subscriber"
+      ]
+    },
+    "providerConfig": {
+      "configs" : {
+        "type": "SiddhiStoreDataProvider",
+        "config": {
+          "siddhiApp": "@App:name(\"Aggregations\") define stream PreProcessedESBStatStream (componentId string, componentName string, componentType string, duration long, faultCount int, startTime long, entryPoint string, meta_tenantId int); @store(type = 'rdbms', datasource = 'EI_ANALYTICS') @info(name = 'ESBStat') define aggregation ESBStat from PreProcessedESBStatStream select componentId, componentName, componentType, sum(duration) as totalDuration, min(duration) as minDuration, max(duration) as maxDuration, count() as noOfInvocation, sum(faultCount) as faultCount, entryPoint, meta_tenantId, startTime as eventTimestamp group by meta_tenantId, componentId, componentName, componentType, entryPoint aggregate by startTime every sec...months;",
+          "queryData": {
+            "query": "from ESBStat on meta_tenantId=={{tenantId}} within {{timeFrom}}, {{timeTo}} per {{timeunit}} select AGG_TIMESTAMP,noOfInvocation"
+          },
+          "publishingInterval": 60
+        }
+      }
+    }
+  }
+}
