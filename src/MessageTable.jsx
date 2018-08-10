@@ -1,64 +1,80 @@
-import Widget from '@wso2-dashboards/widget';
+import Widget from "@wso2-dashboards/widget";
 import VizG from 'react-vizgrammar';
+import { Scrollbars } from 'react-custom-scrollbars';
+import { MuiThemeProvider, darkBaseTheme, getMuiTheme } from 'material-ui/styles';
+import _ from 'lodash';
 import moment from 'moment';
-
-var PUBLISHER_DATE_TIME_PICKER = 'granularity';
-var TENANT_ID = '-1234';
+let TENANT_ID = '-1234';
 
 class MessageTable extends Widget {
     constructor(props) {
         super(props);
 
-        // Set title to 'OverallTPS'
         this.props.glContainer.setTitle(
-            "OVERALL TPS"
+            "Messages"
         );
 
-        var config = {
-            "x": 'Time',
-            "charts": [{ type: "line", y: "TPS" }],
-            "maxLength": 10,
-            "width": 400,
-            "height": 200,
-            "legend": false,
-            "append": false,
-            "disableVerticalGrid": true,
-            "disableHorizontalGrid": true,
-            "animate": true
+        this.chartConfig = {
+            "charts": [
+                {
+                    "type": "table",
+                    "columns": [
+                        {
+                            "name": "messageId",
+                            "title": "Message ID"
+                        },
+                        {
+                            "name": "host",
+                            "title": "Host"
+                        },
+                        {
+                            "name": "startTime",
+                            "title": "Start Time"
+                        },
+                        {
+                            "name": "status",
+                            "title": "Status"
+                        }
+                    ]
+                }
+            ],
+            "pagination": true,
+            "filterable": true,
+            "append": false
         };
 
-        let metadata = {
+        this.metadata = {
             "names": [
-                "Time",
-                "TPS"
+                "messageId",
+                "host",
+                "startTime",
+                "status"
             ],
             "types": [
+                "ordinal",
+                "ordinal",
                 "time",
-                "linear"
+                "ordinal"
             ]
-        }
-
-        let data = [];
-
-        this.state = {
-            graphConfig: config,
-            graphMetadata: metadata,
-            graphData: data,
-            graphWidth: props.width,
-            graphHeight: props.height,
-            clearGraph: true,
-            timeFromParameter: null,
-            timeToParameter: null,
-            timeUnitParameter: null
         };
 
-        this.props.glContainer.on('resize', this.handleResize.bind(this));
-
-        this.handlePublisherParameters = this.handlePublisherParameters.bind(this);
-        this.handleGraphUpdate = this.handleGraphUpdate.bind(this);
+        this.state = {
+            data: [],
+            metadata: this.metadata,
+            width: this.props.glContainer.width,
+            height: this.props.glContainer.height,
+            btnGroupHeight: 100,
+            clearGraph: true,
+        };
+        this.handleResize = this.handleResize.bind(this);
+        this.props.glContainer.on('resize', this.handleResize);
         this.handleStats = this.handleStats.bind(this);
-    }
+        this.handleGraphUpdate = this.handleGraphUpdate.bind(this);
+        this.handlePublisherParameters = this.handlePublisherParameters.bind(this);
+        this.getCurrentPage = this.getCurrentPage.bind(this);
+        this.getUrlParameter = this.getUrlParameter.bind(this);
 
+    }
     handleResize() {
         this.setState({ width: this.props.glContainer.width, height: this.props.glContainer.height });
     }
@@ -67,44 +83,65 @@ class MessageTable extends Widget {
         super.subscribe(this.handlePublisherParameters);
     }
 
-    /**
-     * Handle published messages from the subscribed widgets in the dashboard to extract required parameters
-     *
-     * @param message JSON object coming from the subscribed widgets
-     */
     handlePublisherParameters(message) {
-        if (PUBLISHER_DATE_TIME_PICKER in message) {
+        if ('granularity' in message) {
             // Update time parameters and clear existing graph
             this.setState({
-                timeFromParameter: moment(message.from).format("YYYY-MM-DD HH:mm:ss"),
-                timeToParameter: moment(message.to).format("YYYY-MM-DD HH:mm:ss"),
+                // timeFromParameter: moment(message.from).format("YYYY-MM-DD HH:mm:ss"),
+                // timeToParameter: moment(message.to).format("YYYY-MM-DD HH:mm:ss"),
+                timeFromParameter: message.from,
+                timeToParameter: message.to,
                 timeUnitParameter: message.granularity,
-                clearGraph: true
+                clearGraph: true // todo: rename (isLoading)
             }, this.handleGraphUpdate);
         }
     }
 
-    /**
-     * Update graph parameters according to the updated publisher widget parameters
-     */
     handleGraphUpdate() {
-        //console.log('A');
         super.getWidgetConfiguration(this.props.widgetID)
             .then((message) => {
 
                 // Get data provider sub json string from the widget configuration
-                let dataProviderConf = this.getProviderConf(message.data);
-                var query = dataProviderConf.configs.config.queryData.query;
+                let dataProviderConf = MessageTable.getProviderConf(message.data);
+                let query = dataProviderConf.configs.config.queryData.query;
+                let pageName = this.getCurrentPage();
+                let componentName;
+                let componentType;
+                let entryPoint;
+                let componentIdentifier = "componentName";
+                let urlParams = new URLSearchParams(window.location.search);
 
-                let timeUnit = this.state.timeUnitParameter.concat("s");
+                if (urlParams.has('id')) {
+                    componentName = this.getUrlParameter('id');
+                }
 
+                if (pageName == "api") {
+                    componentType = "api";
+                } else if (pageName == "proxy") {
+                    componentType = "proxy service"
+                } else {
+                    if (urlParams.has('entryPoint')) {
+                        entryPoint = this.getUrlParameter('entryPoint')
+                    }
+                    if (pageName == "mediator") {
+                        componentType = "mediator";
+                        componentIdentifier = "componentId";
+                    } else if (pageName == "endpoint") {
+                        componentType = "endpoint";
+                    } else if (pageName == "sequence") {
+                        componentType = "sequence";
+                    } else if (pageName == "inbound") {
+                        componentType = "inbound endpoint";
+                    }
+                }
                 // Insert required parameters to the query string
                 let formattedQuery = query
-                    .replace("{{tenantId}}", TENANT_ID)
-                    .replace("{{timeFrom}}", "\'" + this.state.timeFromParameter + "\'")
-                    .replace("{{timeTo}}", "\'" + this.state.timeToParameter + "\'")
-                    .replace("{{timeunit}}", "\'" + timeUnit + "\'")
-
+                    .replace("{{timeFrom}}", this.state.timeFromParameter)
+                    .replace("{{timeTo}}", this.state.timeToParameter)
+                    .replace("{{metaTenantId}}", TENANT_ID)
+                    .replace("{{componentType}}", componentType)
+                    .replace("{{componentIdentifier}}", componentIdentifier)
+                    .replace("{{componentName}}", componentName);
                 dataProviderConf.configs.config.queryData.query = formattedQuery;
 
                 // Request datastore with the modified query
@@ -114,112 +151,64 @@ class MessageTable extends Widget {
                     );
             })
             .catch((error) => {
-                // console.log(error);
+                // todo: Handle error
             });
     }
 
-    getProviderConf(widgetConfiguration) {
+    static getProviderConf(widgetConfiguration) {
         return widgetConfiguration.configs.providerConfig;
     }
 
-    
 
-    /**
-     * Draw the graph with the data retrieved from the data store
-     */
     handleStats(stats) {
-        // For each data point(Ex: For each API), an array of [total invocations, component name of that data point]
-        let dataPointArray = stats.data;
-        let divider = 1;
-
-        // index and label mapping of each element in a data point
-        let labelMapper = {};
-        stats.metadata.names.forEach((value, index) => {
-            labelMapper[value] = index;
-        })
-
-        dataPointArray.forEach((e) => {
-            switch (this.state.timeUnitParameter) {
-                case "month":
-                    divider = 3600 * 24 * 30;
-                    let timeStamp=new Date(e[labelMapper.AGG_TIMESTAMP]);
-                    divider=new Date(timeStamp.getFullYear(),(timeStamp.getMonth()+1),0).getDate()*3600*24;            
-                    break;
-                case "day":
-                    divider = 3600 * 24;
-                    break;
-                case "hour":
-                    divider = 3600;
-                    break;
-                case "minute":
-                    divider = 60;
-                    break;
-            }
-            e[labelMapper.noOfInvocation]=(e[labelMapper.noOfInvocation])/divider;
+        this.setState({
+            metadata: stats.metadata,
+            data: stats.data,
+            clearGraph: false
         });
+    }
+
+    componentWillUnmount() {
+        super.getWidgetChannelManager().unsubscribeWidget(this.props.id);
+    }
 
 
-        // Build data for the graph
-        let data = [];
-        dataPointArray.forEach((dataPoint) => {
-            data.push(
-                [dataPoint[labelMapper.AGG_TIMESTAMP], dataPoint[labelMapper.noOfInvocation]]
-            );
-        });
+    getCurrentPage() {
+        let pageName;
+        let href = parent.window.location.href;
+        let lastSegment = href.substr(href.lastIndexOf('/') + 1);
+        if (lastSegment.indexOf('?') == -1) {
+            pageName = lastSegment;
 
-
-        console.log(data);
-        // Draw the graph with received stats only if data is present after filtering
-        if (data.length > 0) {
-            this.setState({
-                graphData: data,
-                clearGraph: false
-            });
+        } else {
+            pageName = lastSegment.substr(0, lastSegment.indexOf('?'));
         }
+        return pageName;
     }
 
-    /**
-     * Return notification message when required parameters to draw the graph are not available
-     *
-     * @returns {*} <div> element containing the notification message
-     */
-    getEmptyRecordsText() {
-        return (
-            <div class="status-message" style={{ color: 'white', marginLeft: 'auto', marginRight: 'auto' }}>
-                <div class="message message-info">
-                    <h4><i class="icon fw fw-info"></i> No records found</h4>
-                    <p>Please select a valid date range to view stats.</p>
-                </div>
-            </div>
-        );
+    getUrlParameter(name) {
+        name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+        var regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+        var results = regex.exec(location.search);
+        return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
     };
-
-
-
-    /**
-     * Draw the graph with parameters from the widget state
-     *
-     * @returns {*} A VizG graph component with the required graph
-     */
-    drawGraph() {
-        //console.log("Graph Config:", this.state.graphConfig);
-        return <VizG
-            theme={this.props.muiTheme.name}
-            config={this.state.graphConfig}
-            data={this.state.graphData}
-            metadata={this.state.graphMetadata}
-            height={this.props.glContainer.height}
-            width={this.props.glContainer.width}
-        />;
-    }
 
     render() {
         return (
-            <div>
-                {this.state.clearGraph ? this.getEmptyRecordsText() : this.drawGraph()}
-            </div>
+            <MuiThemeProvider muiTheme={getMuiTheme(darkBaseTheme)}>
+                <section style={{ paddingTop: 50 }}>
+                    <VizG
+                        config={this.chartConfig}
+                        metadata={this.state.metadata}
+                        data={this.state.data}
+                        height={this.state.height - this.state.btnGroupHeight}
+                        width={this.state.width}
+                        theme={this.props.muiTheme.name}
+                    />
+                </section>
+            </MuiThemeProvider>
         );
     }
 }
 
-global.dashboard.registerWidget('MessageTable', MessageTable);
+global.dashboard.registerWidget("MessageTable", MessageTable);
