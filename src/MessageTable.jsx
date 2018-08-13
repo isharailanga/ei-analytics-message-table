@@ -20,7 +20,7 @@ class MessageTable extends Widget {
                     "type": "table",
                     "columns": [
                         {
-                            "name": "messageId",
+                            "name": "messageFlowId",
                             "title": "Message ID"
                         },
                         {
@@ -32,7 +32,7 @@ class MessageTable extends Widget {
                             "title": "Start Time"
                         },
                         {
-                            "name": "status",
+                            "name": "faultCount",
                             "title": "Status"
                         }
                     ]
@@ -45,10 +45,10 @@ class MessageTable extends Widget {
 
         this.metadata = {
             "names": [
-                "messageId",
+                "messageFlowId",
                 "host",
                 "startTime",
-                "status"
+                "faultCount"
             ],
             "types": [
                 "ordinal",
@@ -63,9 +63,9 @@ class MessageTable extends Widget {
             metadata: this.metadata,
             width: this.props.glContainer.width,
             height: this.props.glContainer.height,
-            btnGroupHeight: 100,
-            clearGraph: true,
+            btnGroupHeight: 100
         };
+        this.isDataLoaded = false;
         this.handleResize = this.handleResize.bind(this);
         this.props.glContainer.on('resize', this.handleResize);
         this.handleStats = this.handleStats.bind(this);
@@ -86,13 +86,13 @@ class MessageTable extends Widget {
     handlePublisherParameters(message) {
         if ('granularity' in message) {
             // Update time parameters and clear existing graph
+            //this.isDataLoaded=false;
             this.setState({
-                // timeFromParameter: moment(message.from).format("YYYY-MM-DD HH:mm:ss"),
-                // timeToParameter: moment(message.to).format("YYYY-MM-DD HH:mm:ss"),
                 timeFromParameter: message.from,
                 timeToParameter: message.to,
                 timeUnitParameter: message.granularity,
-                clearGraph: true // todo: rename (isLoading)
+                data: []
+                // clearGraph: true // todo: rename (isLoading)
             }, this.handleGraphUpdate);
         }
     }
@@ -100,6 +100,9 @@ class MessageTable extends Widget {
     handleGraphUpdate() {
         super.getWidgetConfiguration(this.props.widgetID)
             .then((message) => {
+
+
+                super.getWidgetChannelManager().unsubscribeWidget(this.props.id);
 
                 // Get data provider sub json string from the widget configuration
                 let dataProviderConf = MessageTable.getProviderConf(message.data);
@@ -149,6 +152,8 @@ class MessageTable extends Widget {
                     .subscribeWidget(
                         this.props.id, this.handleStats, dataProviderConf
                     );
+
+
             })
             .catch((error) => {
                 // todo: Handle error
@@ -161,10 +166,13 @@ class MessageTable extends Widget {
 
 
     handleStats(stats) {
+        let dataArray = stats.data;
+        dataArray.forEach(element => {
+            element[2] = moment(element[2]).format("YYYY-MM-DD HH:mm:ss");
+        });
         this.setState({
             metadata: stats.metadata,
-            data: stats.data,
-            clearGraph: false
+           data:dataArray
         });
     }
 
