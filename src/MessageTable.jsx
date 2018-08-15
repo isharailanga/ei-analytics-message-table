@@ -1,10 +1,10 @@
 import Widget from "@wso2-dashboards/widget";
 import VizG from 'react-vizgrammar';
-import { Scrollbars } from 'react-custom-scrollbars';
 import { MuiThemeProvider, darkBaseTheme, getMuiTheme } from 'material-ui/styles';
-import _ from 'lodash';
 import moment from 'moment';
 let TENANT_ID = '-1234';
+let MESSAGE_PAGE = "message";
+let PARAM_ID = "id";
 
 class MessageTable extends Widget {
     constructor(props) {
@@ -73,7 +73,21 @@ class MessageTable extends Widget {
         this.handlePublisherParameters = this.handlePublisherParameters.bind(this);
         this.getCurrentPage = this.getCurrentPage.bind(this);
         this.getUrlParameter = this.getUrlParameter.bind(this);
+        this.handleRowSelect = this.handleRowSelect.bind(this);
 
+
+    }
+
+    handleRowSelect(event) {
+        //get the messageId from the selected row 
+        let messageId = event.messageFlowId;
+        //substring and modify the URL, so on click, the page is directed to relevant message page with query parameter 'id'
+        let currPageStr = parent.window.location.href;
+        let index = currPageStr.lastIndexOf("/");
+        let tempMsgPageURL = currPageStr.substring(0, (index + 1)) + MESSAGE_PAGE;
+        let msgPageURL = new URL(tempMsgPageURL);
+        msgPageURL.searchParams.append(PARAM_ID, messageId);
+        window.location.href = msgPageURL;
     }
     handleResize() {
         this.setState({ width: this.props.glContainer.width, height: this.props.glContainer.height });
@@ -172,7 +186,7 @@ class MessageTable extends Widget {
         });
         this.setState({
             metadata: stats.metadata,
-           data:dataArray
+            data: dataArray
         });
     }
 
@@ -212,6 +226,7 @@ class MessageTable extends Widget {
                         height={this.state.height - this.state.btnGroupHeight}
                         width={this.state.width}
                         theme={this.props.muiTheme.name}
+                        onClick={this.handleRowSelect}
                     />
                 </section>
             </MuiThemeProvider>

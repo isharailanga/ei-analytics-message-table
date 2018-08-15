@@ -17,8 +17,8 @@
             "query": "select messageFlowId,host,startTime,if(faultCount>0,'Failed','Success') as faultCount from ESBEventTable where startTime>={{timeFrom}} and startTime<{{timeTo}} and metaTenantId={{metaTenantId}} and componentType='{{componentType}}' and {{componentIdentifier}}='{{componentName}}'"
           },
           "tableName": "ESBEventTable",
-          "incrementalColumn": "messageFlowId",
-          "publishingInterval": 5,
+          "incrementalColumn": "startTime",
+          "publishingInterval": 60,
           "publishingLimit": 100
         }
       }
